@@ -1,10 +1,11 @@
 import os
 from pathlib import Path
+from typing import List, Union
 
 from setuptools import find_packages, setup
 
 
-def _load_requirements(path: str, filename: str, comment_char: str = "#"):
+def _load_requirements(path: Union[str, Path], filename: str, comment_char: str = "#") -> List[str]:
     with open(os.path.join(path, filename)) as file:
         lines = [ln.strip() for ln in file.readlines()]
     reqs = []
