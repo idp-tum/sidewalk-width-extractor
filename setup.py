@@ -23,9 +23,15 @@ PROJECT_ROOT_PATH = Path(__file__).parent
 LONG_DESCRIPTION = (PROJECT_ROOT_PATH / "README.md").read_text()
 
 main_packages = _load_requirements(PROJECT_ROOT_PATH, "requirements.txt")
+labeling_packages = _load_requirements(PROJECT_ROOT_PATH, "requirements-labeling.txt")
 dev_packages = _load_requirements(PROJECT_ROOT_PATH, "requirements-dev.txt")
 demo_packages = _load_requirements(PROJECT_ROOT_PATH, "requirements-demo.txt")
-extras = {"dev": dev_packages, "demo": demo_packages, "all": dev_packages + demo_packages}
+extras = {
+    "dev": dev_packages,
+    "labeling": labeling_packages,
+    "demo": demo_packages,
+    "all": dev_packages + demo_packages,
+}
 
 setup(
     name="sidewalk-widths-extractor",
