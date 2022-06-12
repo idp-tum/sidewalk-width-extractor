@@ -5,12 +5,6 @@ TODO Description
 # Setup
 ---
 
-### labeling
-
-```bash
-pip install -e .[labeling]
-```
-
 ### dev
 
 ```bash
