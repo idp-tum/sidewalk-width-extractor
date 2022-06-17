@@ -11,7 +11,13 @@ TODO Description
 pip install -e .[dev]
 ```
 
-### dev + jupyter notebook
+### demo
+
+```bash
+pip install -e .[demo]
+```
+
+### dev + demo
 
 ```bash
 pip install -e .[all]
