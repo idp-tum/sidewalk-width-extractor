@@ -5,7 +5,7 @@ import numpy as np
 import torch
 
 
-def enable_reproducibility(seed: int = 42) -> None:
+def seed_all(seed: int = 42) -> None:
     r"""
     Makes the necessary adjustments for reproducibility
 
