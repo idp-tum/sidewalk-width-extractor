@@ -10,11 +10,12 @@ import torch
 import torch.nn as nn
 from PIL import Image
 from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
+from torch.optim import Optimizer
 
 from sidewalk_widths_extractor.typing import _DEVICE, _PATH
 
 
-def load_checkpoint(source_path: _PATH, module: nn.Module) -> Union[None, int]:
+def load_checkpoint(source_path: _PATH, module: Union[nn.Module, Optimizer]) -> Union[None, int]:
     """Load a nn.Module checkpoint.
 
     Args:
@@ -31,7 +32,7 @@ def load_checkpoint(source_path: _PATH, module: nn.Module) -> Union[None, int]:
 
 def save_checkpoint(
     target_path: _PATH,
-    module: nn.Module,
+    module: Union[nn.Module, Optimizer],
     epoch: Optional[int] = None,
     filename: str = "checkpoint",
     format_type: str = ".pth.tar",
