@@ -6,7 +6,7 @@ import torch
 
 
 def seed_all(seed: int = 42) -> None:
-    r"""
+    """
     Makes the necessary adjustments for reproducibility
 
     Args:

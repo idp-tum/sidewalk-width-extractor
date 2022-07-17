@@ -1,8 +1,8 @@
+import json
 import os
 from typing import Dict, Optional, Union
 
 import torch
-import yaml
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
@@ -404,15 +404,15 @@ class Trainer:
                 "starting_epoch_idx": self._start_epoch_idx,
                 "ending_epoch_idx": self._curr_epoch_idx,
                 "pytorch": {
-                    "used_pytorch_benchmark": self._benchmark,
-                    "used_pytorch_deterministic": self._deterministic,
+                    "benchmark": self._benchmark,
+                    "deterministic": self._deterministic,
                 },
             }
         }
         settings["module"] = self._module.get_settings()
 
-        with open(os.path.join(self._log_path, "settings.yaml"), "w") as file:
-            yaml.dump(settings, file, default_flow_style=False, sort_keys=False)
+        with open(os.path.join(self._log_path, "settings.json"), "w") as file:
+            json.dump(settings, file, indent=4, sort_keys=False)
 
     def _init_progress_bar(
         self, dataloader: DataLoader, category: Category, epoch_idx: Optional[int] = None
@@ -465,7 +465,7 @@ class Trainer:
         """
         if not epoch_results:
             for name, value in step_results.items():
-                epoch_results[name] = Metric(name, category, value)
+                epoch_results[name] = Metric(name, category, value, self._transfer_results_to_cpu)
         else:
             for name, metric in epoch_results.items():
                 metric.update(step_results[name])

@@ -1,9 +1,10 @@
 import os
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Literal, Optional, Union
 
+import segmentation_models_pytorch as smp
 import torch
+from torchmetrics.functional import stat_scores
 
-from sidewalk_widths_extractor.models.unet import UNet
 from sidewalk_widths_extractor.modules import BaseModule
 from sidewalk_widths_extractor.typing import (
     _BATCH,
@@ -16,29 +17,56 @@ from sidewalk_widths_extractor.utilities.io import load_checkpoint, save_checkpo
 from sidewalk_widths_extractor.utilities.visuals import create_stacked_segments
 
 
-class TestModule(BaseModule):
+class SegModule(BaseModule):
     def __init__(
         self,
+        network_id: Union[Literal["unet"], Literal["unet++"]],
+        network_params: Dict[str, Any],
+        optimizer_id: Union[Literal["adam"], Literal["sgd"]],
         optimizer_params: Dict[str, Any],
+        criterion_id: Union[Literal["ce"], Literal["wce"]],
+        criterion_params: Dict[str, Any],
         device: _DEVICE,
     ):
         super().__init__(device)
 
+        self._network_params = network_params
         self._optimizer_params = optimizer_params
-        self._network = UNet(
-            encChannels=(3, 16, 32, 64, 128), decChannels=(128, 64, 32, 16), num_classes=2
-        ).to(self.device)
-        self._optimizer = torch.optim.Adam(
-            params=self._network.parameters(), **self._optimizer_params
-        )
-        self._criterion = torch.nn.CrossEntropyLoss(weight=torch.Tensor([0.1, 1])).to(self.device)
+
+        self._network_id = network_id
+        if self._network_id == "unet":
+            self._network = smp.Unet(**network_params)
+        else:
+            raise Exception("invaild network id")
+
+        self._optimizer_id = optimizer_id
+        if self._optimizer_id == "adam":
+            self._optimizer = torch.optim.Adam(
+                params=self._network.parameters(), **self._optimizer_params
+            )
+        elif self._optimizer == "sgd":
+            self._optimizer = torch.optim.SGD(self._network.parameters(), **self._optimizer_params)
+        else:
+            raise Exception("invaild optimizer id")
+
+        self._criterion_id = criterion_id
+        if self._criterion_id == "wce":
+            weight = torch.Tensor(criterion_params["weight"])
+            self._criterion = torch.nn.CrossEntropyLoss(weight=weight)
+        elif self._criterion_id == "ce":
+            self._criterion = torch.nn.CrossEntropyLoss()
+        else:
+            raise Exception("invalid criterion id")
+
+        self._network.to(self.device)
+        self._criterion.to(self.device)
 
     def train_step(self, batch: _BATCH, step_idx: int, epoch_idx: int) -> _STEP_RESULT:
         images = batch[0].to(self.device)
-        masks = batch[1].to(self.device)
+        masks = batch[1].to(self.device).squeeze(1).long()
 
         out = self._network(images)
-        loss = self._criterion(out, masks.squeeze(1))
+        loss = self._criterion(out, masks)
 
         self._optimizer.zero_grad()
         loss.backward()
@@ -55,17 +83,23 @@ class TestModule(BaseModule):
         self, batch: _BATCH, step_idx: int, epoch_idx: Optional[int] = None
     ) -> _STEP_RESULT:
         images = batch[0].to(self.device)
-        masks = batch[1].to(self.device).squeeze(1)
+        masks = batch[1].to(self.device).squeeze(1).long()
 
         out = self._network(images)
         loss = self._criterion(out, masks)
         preds = torch.argmax(out, dim=1)
+
+        stats = stat_scores(preds, masks, reduce="micro", mdmc_reduce="global", num_classes=2)
 
         if epoch_idx and step_idx == 0:
             self.log_stacked_segments_img(images, preds, masks, "val", epoch_idx)
 
         return {
             "loss": loss,
+            "tp": stats[0],
+            "fp": stats[1],
+            "tn": stats[2],
+            "fn": stats[3],
         }
 
     def test_step(
@@ -125,7 +159,7 @@ class TestModule(BaseModule):
                 target_folder, self._optimizer, epoch_idx, optimizer_filename, file_format
             )
 
-    def load(self, checkpoint_path: Union[Dict[str, _PATH], _PATH]) -> Optional[int]:
+    def load(self, checkpoint_path: Dict[str, _PATH]) -> Optional[int]:
         """
         Load weights.
 
@@ -158,7 +192,7 @@ class TestModule(BaseModule):
     def on_train_epoch_end(
         self, epoch_results: _EPOCH_RESULT, epoch_idx: Optional[int] = None
     ) -> None:
-        if epoch_idx:  # log during the training
+        if epoch_idx and self.writer:  # log during the training
             for name, metric in epoch_results.items():
                 value = metric.compute("mean")
                 self.writer.add_scalar(metric.identifier, value.item(), epoch_idx)
@@ -166,14 +200,35 @@ class TestModule(BaseModule):
     def on_val_epoch_end(
         self, epoch_results: _EPOCH_RESULT, epoch_idx: Optional[int] = None
     ) -> None:
-        if epoch_idx:  # log during the training
-            for name, metric in epoch_results.items():
+        if epoch_idx and self.writer:  # log during the training
+            if "loss" in epoch_results:
+                metric = epoch_results["loss"]
                 self.writer.add_scalar(metric.identifier, metric.compute("mean").item(), epoch_idx)
+            if "tp" in epoch_results:
+                tp = epoch_results["tp"].compute("sum")
+                fp = epoch_results["fp"].compute("sum")
+                fn = epoch_results["fn"].compute("sum")
+                tn = epoch_results["tn"].compute("sum")
+
+                accuracy = (tp + tn) / (tp + tn + fp + fn)
+                self.writer.add_scalar("val/accuracy", accuracy.item(), epoch_idx)
+
+                precision = tp / (tp + fp)
+                self.writer.add_scalar("val/precision", precision.item(), epoch_idx)
+
+                recall = tp / (tp + fn)
+                self.writer.add_scalar("val/recall", recall.item(), epoch_idx)
+
+                iou = tp / (tp + fn + fp)
+                self.writer.add_scalar("val/iou", iou.item(), epoch_idx)
+
+                dice = 2 * tp / (2 * tp + fn + fp)
+                self.writer.add_scalar("val/dice", dice.item(), epoch_idx)
 
     def log_stacked_segments_img(
         self, img: torch.Tensor, p: torch.Tensor, t: torch.Tensor, category: str, current_epoch: int
     ) -> None:
-        if self.writer is not None:
+        if self.writer:
             self.writer.add_image(
                 f"{category}/all",
                 create_stacked_segments(
