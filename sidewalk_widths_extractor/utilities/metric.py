@@ -7,12 +7,23 @@ from sidewalk_widths_extractor.utilities.enums import Category
 
 
 class Metric:
-    def __init__(self, name: str, category: Category, value: Optional[torch.Tensor] = None) -> None:
+    def __init__(
+        self,
+        name: str,
+        category: Category,
+        value: Optional[torch.Tensor] = None,
+        transfer_to_cpu: bool = False,
+    ) -> None:
         self.name = name
         self.category = category
         self.identifier = category + "/" + name
+        self.transfer_to_cpu = transfer_to_cpu
         if value is not None:
-            self.values = [value]
+            if self.transfer_to_cpu:
+                self.values = [value.cpu()]
+            else:
+                self.values = [value]
+
         else:
             self.values = []
 
@@ -29,7 +40,10 @@ class Metric:
         return self.identifier
 
     def update(self, value: torch.Tensor) -> None:
-        self.values.append(value)
+        if self.transfer_to_cpu:
+            self.values.append(value.cpu())
+        else:
+            self.values.append(value)
 
     def compute(
         self,
