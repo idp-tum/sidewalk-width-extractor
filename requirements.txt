@@ -8,3 +8,4 @@ torchmetrics
 segmentation-models-pytorch==0.2.1
 albumentations
 scikit-learn
+optuna
