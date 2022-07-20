@@ -1,6 +1,6 @@
 {
   "general": {
-    "random_seed": 23423442,
+    "random_seed": 42,
     "force_cpu_usage": false,
     "source_images_folder": "demo\\data\\images",
     "source_masks_folder": "demo\\data\\masks",
