@@ -27,15 +27,23 @@ class SegModule(BaseModule):
         criterion_id: Union[Literal["ce"], Literal["wce"]],
         criterion_params: Dict[str, Any],
         device: _DEVICE,
+        save_network_checkpoint: bool = True,
+        save_optimizer_checkpoint: bool = True,
     ):
         super().__init__(device)
 
         self._network_params = network_params
         self._optimizer_params = optimizer_params
+        self._criterion_params = criterion_params
+
+        self._save_network_checkpoint = save_network_checkpoint
+        self._save_optimizer_checkpoint = save_optimizer_checkpoint
 
         self._network_id = network_id
         if self._network_id == "unet":
             self._network = smp.Unet(**network_params)
+        elif self._network_id == "unet++":
+            self._network = smp.UnetPlusPlus(**network_params)
         else:
             raise Exception("invaild network id")
 
@@ -45,7 +53,9 @@ class SegModule(BaseModule):
                 params=self._network.parameters(), **self._optimizer_params
             )
         elif self._optimizer == "sgd":
-            self._optimizer = torch.optim.SGD(self._network.parameters(), **self._optimizer_params)
+            self._optimizer = torch.optim.SGD(
+                params=self._network.parameters(), **self._optimizer_params
+            )
         else:
             raise Exception("invaild optimizer id")
 
@@ -60,6 +70,13 @@ class SegModule(BaseModule):
 
         self._network.to(self.device)
         self._criterion.to(self.device)
+
+    def get_settings(self) -> Dict[str, Any]:
+        return {
+            "network": {"id": self._network_id, "params": self._network_params},
+            "optimizer": {"id": self._optimizer_id, "params": self._optimizer_params},
+            "criterion": {"id": self._criterion_id, "params": self._criterion_params},
+        }
 
     def train_step(self, batch: _BATCH, step_idx: int, epoch_idx: int) -> _STEP_RESULT:
         images = batch[0].to(self.device)
@@ -89,7 +106,7 @@ class SegModule(BaseModule):
         loss = self._criterion(out, masks)
         preds = torch.argmax(out, dim=1)
 
-        stats = stat_scores(preds, masks, reduce="micro", mdmc_reduce="global", num_classes=2)
+        stats = stat_scores(preds, masks, reduce="macro", mdmc_reduce="global", num_classes=2)[1]
 
         if epoch_idx and step_idx == 0:
             self.log_stacked_segments_img(images, preds, masks, "val", epoch_idx)
@@ -106,13 +123,20 @@ class SegModule(BaseModule):
         self, batch: _BATCH, step_idx: int, epoch_idx: Optional[int] = None
     ) -> _STEP_RESULT:
         images = batch[0].to(self.device)
-        masks = batch[1].to(self.device).squeeze(1)
+        masks = batch[1].to(self.device).squeeze(1).long()
 
         out = self._network(images)
         loss = self._criterion(out, masks)
+        preds = torch.argmax(out, dim=1)
+
+        stats = stat_scores(preds, masks, reduce="macro", mdmc_reduce="global", num_classes=2)[1]
 
         return {
             "loss": loss,
+            "tp": stats[0],
+            "fp": stats[1],
+            "tn": stats[2],
+            "fn": stats[3],
         }
 
     def infer(self, x: Any) -> Any:
@@ -124,8 +148,8 @@ class SegModule(BaseModule):
         self,
         epoch_idx: Optional[int] = None,
         target_path: Optional[_PATH] = None,
-        include_network: bool = True,
-        include_optimizer: bool = True,
+        include_network: Optional[bool] = None,
+        include_optimizer: Optional[bool] = None,
         network_filename: str = "network",
         optimizer_filename: str = "optimizer",
         file_format: str = ".pth.tar",
@@ -141,8 +165,15 @@ class SegModule(BaseModule):
             network_filename: The network weights file name. Defaults to "network".
             optimizer_filename: The optimizer weights file name. Defaults to  "optimizer".
         """
-        assert include_network or include_optimizer
+        if not include_network and not include_optimizer:
+            return
+
         assert self.trained or self.resumed
+
+        if include_network is None:
+            include_network = self._save_network_checkpoint
+        if include_optimizer is None:
+            include_optimizer = self._save_optimizer_checkpoint
 
         target_folder = (
             target_path
