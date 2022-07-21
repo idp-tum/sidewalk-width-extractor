@@ -10,59 +10,8 @@ from sidewalk_widths_extractor.dataset import SatelliteDataset
 from sidewalk_widths_extractor.modules.seg import SegModule
 from sidewalk_widths_extractor.utilities import get_device
 
-# DEFAULT_TARGET_LOG_FOLDER = "logs"
 
-# --- TODO
-
-# def integrity_check(config: Dict[str, Any]) -> Dict[str, Any]:
-#     def _check(i, c, d, t) -> Any:
-#         if d is not None and i not in c:
-#             return d
-#         assert isinstance(c[i], t)
-#         return c[i]
-
-#     out = {}
-
-#     assert "general" in config
-#     assert "parameters" in config
-
-#     config_general = config["general"]
-#     out["general"] = {
-#         "log_folder": _check("log_folder", config_general, DEFAULT_TARGET_LOG_FOLDER, str)
-#     }
-#     if "log_folder" in config_general:
-#         assert isinstance("log_folder", str)
-#         out["log_folder"] = config_general["log_folder"]
-#     else:
-#         pass
-
-#     return config
-
-
-def get_args() -> Namespace:
-    """Parse given arguments
-
-    Returns:
-        Namespace: parsed arguments
-    """
-    parser = ArgumentParser()
-
-    parser.add_argument("--config", type=str, help="path to the config file", required=True)
-
-    return parser.parse_args()
-
-
-if __name__ == "__main__":
-    args = get_args()
-
-    assert os.path.exists(args.config), f"specified config file is not found in {args.config}"
-
-    config = None
-    with open(args.config) as file:
-        config = json.load(file)
-
-    # config = integrity_check(config)
-
+def train(config) -> None:
     seed_all(config["general"]["random_seed"])
 
     if config["general"]["force_cpu_usage"]:
@@ -128,6 +77,18 @@ if __name__ == "__main__":
             persistent_workers=config["validation"]["data"]["persistent_workers"],
         )
 
+    if config["parameters"]["network"]["encoder_weights"] == "none":
+        config["parameters"]["network"]["encoder_weights"] = None
+
+    if config["parameters"]["network"]["encoder_depth"] == 5:
+        config["parameters"]["network"]["decoder_channels"] = (256, 128, 64, 32, 16)
+    elif config["parameters"]["network"]["encoder_depth"] == 4:
+        config["parameters"]["network"]["decoder_channels"] = (128, 64, 32, 16)
+    elif config["parameters"]["network"]["encoder_depth"] == 3:
+        config["parameters"]["network"]["decoder_channels"] = (64, 32, 16)
+    else:
+        raise Exception("encoder_depth must be between 3 and 5")
+
     module = SegModule(
         config["parameters"]["network_id"],
         config["parameters"]["network"],
@@ -136,6 +97,8 @@ if __name__ == "__main__":
         config["parameters"]["criterion_id"],
         config["parameters"]["criterion"],
         device,
+        config["logging"]["save_network_checkpoint"],
+        config["logging"]["save_optimizer_checkpoint"],
     )
 
     if config["logging"]["include_date"]:
@@ -170,3 +133,28 @@ if __name__ == "__main__":
 
     with open(os.path.join(trainer.log_dir, "config.json"), "w") as file:
         json.dump(config, file, indent=2, sort_keys=False)
+
+
+def get_args() -> Namespace:
+    """Parse given arguments
+
+    Returns:
+        Namespace: parsed arguments
+    """
+    parser = ArgumentParser()
+
+    parser.add_argument("--config", type=str, help="path to the config file", required=True)
+
+    return parser.parse_args()
+
+
+if __name__ == "__main__":
+    args = get_args()
+
+    assert os.path.exists(args.config), f"specified config file is not found in {args.config}"
+
+    config = None
+    with open(args.config) as file:
+        config = json.load(file)
+
+    train(config)

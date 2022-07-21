@@ -8,13 +8,13 @@
     "enable_validation": true,
     "train_val_split_ratio": 0.8,
     "transfer_step_results_to_cpu": false,
-    "pytorch_benchmark_enabled": false,
+    "pytorch_benchmark_enabled": true,
     "pytorch_deterministic_enabled": false
   },
   "logging": {
-    "run_id": "wce 01-10 all-aug",
+    "run_id": "vgg16_bn",
     "include_date": true,
-    "target_log_folder": "demo\\logs",
+    "target_log_folder": "demo\\logs\\individual",
     "enable_progress_bar": true,
     "save_settings_file": true,
     "save_scalar_metrics": true,
@@ -27,16 +27,16 @@
     "num_epochs": 50,
     "max_steps": null,
     "data": {
-      "batch_size": 16,
+      "batch_size": 8,
       "shuffle": true,
       "drop_last": false,
       "pin_memory": true,
       "num_workers": 0,
       "persistent_workers": false,
       "transform": {
-        "horizontal_flip_probability": 0.2,
-        "vertical_flip_probability": 0.2,
-        "random_brightness_contrast_probability": 0.2,
+        "horizontal_flip_probability": 0.3833347137156021,
+        "vertical_flip_probability": 0.9252100013020603,
+        "random_brightness_contrast_probability": 0.6512654541313277,
         "brightness_limit": 0.2,
         "contrast_limit": 0.2
       }
@@ -54,21 +54,24 @@
     }
   },
   "parameters": {
-    "network_id": "unet",
+    "network_id": "unet++",
     "network": {
-      "encoder_name": "resnet34",
+      "encoder_name": "vgg16_bn",
       "encoder_weights": "imagenet",
+      "encoder_depth": 4,
       "in_channels": 3,
       "classes": 2
     },
     "optimizer_id": "adam",
     "optimizer": {
-      "lr": 2e-4,
-      "weight_decay": 1e-4
+      "lr": 0.0007495269882274605,
+      "weight_decay": 0.00014431491913213836,
+      "betas": [0.9, 0.999],
+      "eps": 1e-8
     },
     "criterion_id": "wce",
     "criterion": {
-      "weight": [0.1, 1]
+      "weight": [0.4487400288054419, 0.3028686699290821]
     }
   }
 }

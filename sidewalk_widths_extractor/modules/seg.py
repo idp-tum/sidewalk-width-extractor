@@ -91,7 +91,7 @@ class SegModule(BaseModule):
 
         preds = torch.argmax(out, dim=1)
 
-        if step_idx == 0:
+        if epoch_idx and epoch_idx % 5 == 0 and step_idx == 0:
             self.log_stacked_segments_img(images, preds, masks, "train", epoch_idx)
 
         return {"loss": loss}
@@ -108,7 +108,7 @@ class SegModule(BaseModule):
 
         stats = stat_scores(preds, masks, reduce="macro", mdmc_reduce="global", num_classes=2)[1]
 
-        if epoch_idx and step_idx == 0:
+        if epoch_idx and epoch_idx % 5 == 0 and step_idx == 0:
             self.log_stacked_segments_img(images, preds, masks, "val", epoch_idx)
 
         return {
@@ -165,8 +165,6 @@ class SegModule(BaseModule):
             network_filename: The network weights file name. Defaults to "network".
             optimizer_filename: The optimizer weights file name. Defaults to  "optimizer".
         """
-        if not include_network and not include_optimizer:
-            return
 
         assert self.trained or self.resumed
 
@@ -224,7 +222,7 @@ class SegModule(BaseModule):
         self, epoch_results: _EPOCH_RESULT, epoch_idx: Optional[int] = None
     ) -> None:
         if epoch_idx and self.writer:  # log during the training
-            for name, metric in epoch_results.items():
+            for _, metric in epoch_results.items():
                 value = metric.compute("mean")
                 self.writer.add_scalar(metric.identifier, value.item(), epoch_idx)
 
@@ -244,7 +242,11 @@ class SegModule(BaseModule):
                 accuracy = (tp + tn) / (tp + tn + fp + fn)
                 self.writer.add_scalar("val/accuracy", accuracy.item(), epoch_idx)
 
-                precision = tp / (tp + fp)
+                if not tp + fp == 0:
+                    precision = tp / (tp + fp)
+                else:
+                    precision = torch.tensor(0.0)
+
                 self.writer.add_scalar("val/precision", precision.item(), epoch_idx)
 
                 recall = tp / (tp + fn)

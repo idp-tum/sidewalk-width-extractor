@@ -1,22 +1,26 @@
 {
   "general": {
-    "n_trials": 10,
+    "n_trials": 20,
     "random_seed": 42,
     "force_cpu_usage": false,
     "source_images_folder": "demo\\data\\images",
     "source_masks_folder": "demo\\data\\masks",
-    "source_checkpoint_path": null,
-    "enable_validation": true,
     "train_val_split_ratio": 0.8,
     "transfer_step_results_to_cpu": false,
-    "pytorch_benchmark_enabled": false,
+    "pytorch_benchmark_enabled": true,
     "pytorch_deterministic_enabled": false
   },
   "logging": {
-    "run_id": "tuning",
+    "run_id": "sample tune",
     "include_date": true,
-    "target_log_folder": "demo\\hp-logs",
-    "enable_progress_bar": true
+    "target_log_folder": "demo\\logs\\tuning",
+    "enable_progress_bar": false,
+    "save_settings_file": true,
+    "save_scalar_metrics": true,
+    "save_figure_images": false,
+    "save_checkpoint_every_n_epoch": null,
+    "save_network_checkpoint": false,
+    "save_optimizer_checkpoint": false
   },
   "training": {
     "num_epochs": 50,
@@ -45,11 +49,15 @@
     },
     "network_encoder": {
       "type": "categorical",
-      "value": ["resnet18", "resnet34"]
+      "value": ["resnet34", "timm-efficientnet-b3", "timm-efficientnet-b4"]
     },
     "encoder_weights": {
       "type": "categorical",
       "value": ["none", "imagenet"]
+    },
+    "encoder_depth": {
+      "type": "int",
+      "value": [3, 5]
     },
     "batch_size": {
       "type": "categorical",
@@ -57,7 +65,7 @@
     },
     "lr": {
       "type": "loguniform",
-      "value": [1e-5, 1e-2]
+      "value": [1e-6, 1e-2]
     },
     "weight_decay": {
       "type": "loguniform",
