@@ -10,7 +10,11 @@ from torch.utils.data import DataLoader
 from sidewalk_widths_extractor import Trainer, seed_all
 from sidewalk_widths_extractor.dataset import SatelliteDataset
 from sidewalk_widths_extractor.modules.seg import SegModule
-from sidewalk_widths_extractor.utilities import get_device
+from sidewalk_widths_extractor.utilities import (
+    get_device,
+    save_writer_figures,
+    save_writer_scalars,
+)
 
 
 def get_suggest(trial, s_name: str, s_type: str, s_values: Any) -> Any:
@@ -30,6 +34,8 @@ def objective(trial, override_log_dir, config):
 
     if config["general"]["force_cpu_usage"]:
         device = "cpu"
+        config["training"]["data"]["pin_memory"] = False
+        config["validation"]["data"]["pin_memory"] = False
     else:
         device = get_device()
 
@@ -79,11 +85,22 @@ def objective(trial, override_log_dir, config):
     if params["encoder_weights"] == "none":
         params["encoder_weights"] = None
 
+    if params["encoder_depth"] == 5:
+        params["decoder_channels"] = (256, 128, 64, 32, 16)
+    elif params["encoder_depth"] == 4:
+        params["decoder_channels"] = (128, 64, 32, 16)
+    elif params["encoder_depth"] == 3:
+        params["decoder_channels"] = (64, 32, 16)
+    else:
+        raise Exception("encoder_depth must be between 3 and 5")
+
     module = SegModule(
         params["network"],
         {
             "encoder_name": params["network_encoder"],
             "encoder_weights": params["encoder_weights"],
+            "encoder_depth": params["encoder_depth"],
+            "decoder_channels": params["decoder_channels"],
             "in_channels": 3,
             "classes": 2,
         },
@@ -97,8 +114,8 @@ def objective(trial, override_log_dir, config):
         "wce",
         {"weight": [params["criterion_weights_0"], params["criterion_weights_0"]]},
         device,
-        save_network_checkpoint=False,
-        save_optimizer_checkpoint=False,
+        save_network_checkpoint=config["logging"]["save_network_checkpoint"],
+        save_optimizer_checkpoint=config["logging"]["save_optimizer_checkpoint"],
     )
 
     trainer = Trainer(
@@ -111,23 +128,35 @@ def objective(trial, override_log_dir, config):
         transfer_results_to_cpu=config["general"]["transfer_step_results_to_cpu"],
     )
 
-    trainer.fit(
-        module=module,
-        dataloader=train_dataloader,
-        validate_dataloader=val_dataloader,
-        max_epochs=config["training"]["num_epochs"],
-        checkpoint_path=config["general"]["source_checkpoint_path"],
-        save_scalars=True,
-    )
+    dice = 0.0
 
-    results = trainer.validate(dataloader=val_dataloader)
+    for epoch_idx in range(1, config["training"]["num_epochs"] + 1):
+        results = trainer.tune(
+            module=module,
+            dataloader=train_dataloader,
+            validate_dataloader=val_dataloader,
+            epoch_idx=epoch_idx,
+        )
 
-    tp = sum(results["tp"])
-    fp = sum(results["fp"])
-    fn = sum(results["fn"])
-    # tn = results["tn"].compute("sum")
+        tp = sum(results["tp"])
+        fp = sum(results["fp"])
+        fn = sum(results["fn"])
+        # tn = results["tn"].compute("sum")
 
-    dice = 2 * tp / (2 * tp + fn + fp)
+        dice = 2 * tp / (2 * tp + fn + fp)
+
+        trial.report(dice, epoch_idx)
+
+        # Handle pruning based on the intermediate value.
+        if trial.should_prune():
+            raise optuna.exceptions.TrialPruned()
+
+    if config["logging"]["save_settings_file"]:
+        trainer.save_settings()
+    if config["logging"]["save_scalar_metrics"]:
+        save_writer_scalars(trainer.log_dir)
+    if config["logging"]["save_figure_images"]:
+        save_writer_figures(trainer.log_dir)
 
     return dice
 
@@ -141,7 +170,22 @@ def tune(config):
             config["logging"]["target_log_folder"], config["logging"]["run_id"]
         )
 
-    study = optuna.create_study(direction="maximize", sampler=optuna.samplers.TPESampler())
+    study = optuna.create_study(
+        study_name=config["logging"]["run_id"],
+        direction="maximize",
+        sampler=optuna.samplers.TPESampler(),
+        # pruner=optuna.pruners.MedianPruner(
+        #     n_startup_trials=5, n_warmup_steps=25, interval_steps=10
+        # ),
+        pruner=optuna.pruners.HyperbandPruner(
+            min_resource=25, max_resource=config["training"]["num_epochs"], reduction_factor=3
+        ),
+    )
+
+    if "enqueue_trial" in config:
+        print("enqueued a trial")
+        study.enqueue_trial(config["enqueue_trial"])
+
     study.optimize(
         lambda trial: objective(trial, override_log_dir, config),
         n_trials=config["general"]["n_trials"],
@@ -152,12 +196,26 @@ def tune(config):
     for key, value in best_trial.params.items():
         print(f"{key}: {value}")
 
+    with open(os.path.join(config["logging"]["target_log_folder"], "config.json"), "w") as file:
+        json.dump(config, file, indent=2, sort_keys=False)
+
     df = study.trials_dataframe()
 
     if override_log_dir:
         df.to_csv(os.path.join(override_log_dir, "results.csv"))
     else:
         df.to_csv(os.path.join(config["logging"]["target_log_folder"], "results.csv"))
+
+    fig = optuna.visualization.plot_param_importances(study)
+    fig.write_image(os.path.join(config["logging"]["target_log_folder"], "param_importances.png"))
+
+    fig = optuna.visualization.plot_optimization_history(study)
+    fig.write_image(
+        os.path.join(config["logging"]["target_log_folder"], "optimization_history.png")
+    )
+
+    fig = optuna.visualization.plot_parallel_coordinate(study)
+    fig.write_image(os.path.join(config["logging"]["target_log_folder"], "parallel_coordinate.png"))
 
 
 def get_args() -> Namespace:

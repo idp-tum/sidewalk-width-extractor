@@ -198,11 +198,39 @@ class Trainer:
         self._module.on_end()
 
         if save_settings:
-            self._save_settings()
+            self.save_settings()
         if save_scalars:
             save_writer_scalars(self._log_path)
         if save_figures:
             save_writer_figures(self._log_path)
+
+    def tune(
+        self,
+        module: BaseModule,
+        dataloader: DataLoader,
+        validate_dataloader: DataLoader,
+        epoch_idx: Optional[int] = None,
+    ) -> _EPOCH_RESULT:
+        assert isinstance(module, BaseModule)
+        assert isinstance(dataloader, DataLoader)
+        assert isinstance(validate_dataloader, DataLoader)
+
+        self._module = module
+        self._curr_epoch_idx = epoch_idx
+
+        self._trained = True
+        if epoch_idx == 1:
+            self._setup()
+
+        self._module.on_train_epoch_start(epoch_idx)
+        train_epoch_results = self._train_epoch(dataloader, epoch_idx)
+        self._module.on_train_epoch_end(train_epoch_results, epoch_idx)
+
+        self._module.on_val_epoch_start(epoch_idx)
+        val_epoch_results = self._validate_epoch(validate_dataloader, epoch_idx)
+        self._module.on_val_epoch_end(val_epoch_results, epoch_idx)
+
+        return {k: v.values for k, v in val_epoch_results.items()}
 
     def validate(
         self,
@@ -395,7 +423,7 @@ class Trainer:
                 self._writer = SummaryWriter(self._log_path)
             self._module.writer = self._writer
 
-    def _save_settings(self) -> None:
+    def save_settings(self) -> None:
         settings = {
             "run": {
                 "run_id": os.path.basename(os.path.normpath(self._log_path)),
