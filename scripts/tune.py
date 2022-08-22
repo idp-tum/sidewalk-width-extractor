@@ -202,8 +202,12 @@ def tune(config):
     df = study.trials_dataframe()
 
     if override_log_dir:
+        with open(os.path.join(override_log_dir, "config.json"), "w") as file:
+            json.dump(config, file, indent=2, sort_keys=False)
         df.to_csv(os.path.join(override_log_dir, "results.csv"))
     else:
+        with open(os.path.join(config["logging"]["target_log_folder"], "config.json"), "w") as file:
+            json.dump(config, file, indent=2, sort_keys=False)
         df.to_csv(os.path.join(config["logging"]["target_log_folder"], "results.csv"))
 
     fig = optuna.visualization.plot_param_importances(study)
