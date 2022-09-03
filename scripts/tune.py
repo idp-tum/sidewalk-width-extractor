@@ -5,6 +5,7 @@ from typing import Any
 
 import albumentations as A
 import optuna
+import torch
 from torch.utils.data import DataLoader
 
 from sidewalk_widths_extractor import Trainer, seed_all
@@ -30,6 +31,7 @@ def get_suggest(trial, s_name: str, s_type: str, s_values: Any) -> Any:
 
 
 def objective(trial, override_log_dir, config):
+    torch.cuda.empty_cache()
     seed_all(config["general"]["random_seed"])
 
     if config["general"]["force_cpu_usage"]:
@@ -43,13 +45,27 @@ def objective(trial, override_log_dir, config):
         k: get_suggest(trial, k, v["type"], v["value"])
         for k, v in config["hyperparameters"].items()
     }
+    print(params)
 
     transform = A.Compose(
         [
+            A.RandomCrop(
+                width=config["general"]["target_image_width"],
+                height=config["general"]["target_image_height"],
+            ),
             A.HorizontalFlip(p=params["horizontal_flip_probability"]),
             A.VerticalFlip(p=params["vertical_flip_probability"]),
             A.RandomBrightnessContrast(
                 p=params["random_brightness_contrast_probability"],
+            ),
+        ]
+    )
+
+    val_transform = A.Compose(
+        [
+            A.CenterCrop(
+                width=config["general"]["target_image_width"],
+                height=config["general"]["target_image_height"],
             ),
         ]
     )
@@ -59,6 +75,7 @@ def objective(trial, override_log_dir, config):
         config["general"]["source_masks_folder"],
         config["general"]["train_val_split_ratio"],
         train_transform=transform,
+        val_transform=val_transform,
         random_seed=config["general"]["random_seed"],
     )
 
@@ -84,7 +101,6 @@ def objective(trial, override_log_dir, config):
 
     if params["encoder_weights"] == "none":
         params["encoder_weights"] = None
-
     if params["encoder_depth"] == 5:
         params["decoder_channels"] = (256, 128, 64, 32, 16)
     elif params["encoder_depth"] == 4:
@@ -95,8 +111,8 @@ def objective(trial, override_log_dir, config):
         raise Exception("encoder_depth must be between 3 and 5")
 
     module = SegModule(
-        params["network"],
-        {
+        network_id=params["network"],
+        network_params={
             "encoder_name": params["network_encoder"],
             "encoder_weights": params["encoder_weights"],
             "encoder_depth": params["encoder_depth"],
@@ -104,16 +120,18 @@ def objective(trial, override_log_dir, config):
             "in_channels": 3,
             "classes": 2,
         },
-        "adam",
-        {
+        optimizer_id="adam",
+        optimizer_params={
             "lr": params["lr"],
             "weight_decay": params["weight_decay"],
             "betas": [0.9, 0.999],
             "eps": 1e-8,
         },
-        "wce",
-        {"weight": [params["criterion_weights_0"], params["criterion_weights_0"]]},
-        device,
+        criterion_id="wce",
+        criterion_params={"weight": [params["criterion_weights_0"], params["criterion_weights_1"]]},
+        scheduler_id=config["training"]["scheduler"],
+        scheduler_params=config["training"]["scheduler_params"],
+        device=device,
         save_network_checkpoint=config["logging"]["save_network_checkpoint"],
         save_optimizer_checkpoint=config["logging"]["save_optimizer_checkpoint"],
     )
@@ -131,6 +149,7 @@ def objective(trial, override_log_dir, config):
     dice = 0.0
 
     for epoch_idx in range(1, config["training"]["num_epochs"] + 1):
+
         results = trainer.tune(
             module=module,
             dataloader=train_dataloader,
@@ -142,19 +161,30 @@ def objective(trial, override_log_dir, config):
         fp = sum(results["fp"])
         fn = sum(results["fn"])
         # tn = results["tn"].compute("sum")
-
         dice = 2 * tp / (2 * tp + fn + fp)
 
         trial.report(dice, epoch_idx)
 
         # Handle pruning based on the intermediate value.
+
         if trial.should_prune():
             raise optuna.exceptions.TrialPruned()
 
+    module.save(config["training"]["num_epochs"])
+
     if config["logging"]["save_settings_file"]:
-        trainer.save_settings()
+        trainer.save_settings(
+            {
+                "no_train_samples": len(train_dataloader.dataset),
+                "train_batch_size": train_dataloader.batch_size,
+                "no_validation_samples": len(val_dataloader.dataset),
+                "validation_batch_size": val_dataloader.batch_size,
+            }
+        )
+
     if config["logging"]["save_scalar_metrics"]:
         save_writer_scalars(trainer.log_dir)
+
     if config["logging"]["save_figure_images"]:
         save_writer_figures(trainer.log_dir)
 
@@ -165,6 +195,7 @@ def tune(config):
 
     if config["logging"]["include_date"]:
         override_log_dir = None
+
     else:
         override_log_dir = os.path.join(
             config["logging"]["target_log_folder"], config["logging"]["run_id"]
@@ -205,6 +236,7 @@ def tune(config):
         with open(os.path.join(override_log_dir, "config.json"), "w") as file:
             json.dump(config, file, indent=2, sort_keys=False)
         df.to_csv(os.path.join(override_log_dir, "results.csv"))
+
     else:
         with open(os.path.join(config["logging"]["target_log_folder"], "config.json"), "w") as file:
             json.dump(config, file, indent=2, sort_keys=False)
@@ -212,12 +244,10 @@ def tune(config):
 
     fig = optuna.visualization.plot_param_importances(study)
     fig.write_image(os.path.join(config["logging"]["target_log_folder"], "param_importances.png"))
-
     fig = optuna.visualization.plot_optimization_history(study)
     fig.write_image(
         os.path.join(config["logging"]["target_log_folder"], "optimization_history.png")
     )
-
     fig = optuna.visualization.plot_parallel_coordinate(study)
     fig.write_image(os.path.join(config["logging"]["target_log_folder"], "parallel_coordinate.png"))
 
@@ -229,19 +259,14 @@ def get_args() -> Namespace:
         Namespace: parsed arguments
     """
     parser = ArgumentParser()
-
     parser.add_argument("--config", type=str, help="path to the config file", required=True)
-
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = get_args()
-
     assert os.path.exists(args.config), f"specified config file is not found in {args.config}"
-
     config = None
     with open(args.config) as file:
         config = json.load(file)
-
     tune(config)

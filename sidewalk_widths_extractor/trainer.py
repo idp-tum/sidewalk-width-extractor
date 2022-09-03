@@ -198,7 +198,18 @@ class Trainer:
         self._module.on_end()
 
         if save_settings:
-            self.save_settings()
+            self.save_settings(
+                {
+                    "no_train_samples": len(dataloader.dataset),
+                    "train_batch_size": dataloader.batch_size,
+                    "no_validation_samples": len(validate_dataloader.dataset)
+                    if validate_dataloader
+                    else None,
+                    "validation_batch_size": validate_dataloader.batch_size
+                    if validate_dataloader
+                    else None,
+                }
+            )
         if save_scalars:
             save_writer_scalars(self._log_path)
         if save_figures:
@@ -423,7 +434,7 @@ class Trainer:
                 self._writer = SummaryWriter(self._log_path)
             self._module.writer = self._writer
 
-    def save_settings(self) -> None:
+    def save_settings(self, additional_settings: Optional[dict] = None) -> None:
         settings = {
             "run": {
                 "run_id": os.path.basename(os.path.normpath(self._log_path)),
@@ -437,6 +448,9 @@ class Trainer:
                 },
             }
         }
+        if additional_settings:
+            settings["run"].update(additional_settings)
+
         settings["module"] = self._module.get_settings()
 
         with open(os.path.join(self._log_path, "settings.json"), "w") as file:
