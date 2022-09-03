@@ -3,6 +3,7 @@ from typing import Any, Dict, Literal, Optional, Union
 
 import segmentation_models_pytorch as smp
 import torch
+from torch.optim.lr_scheduler import ExponentialLR, LambdaLR, ReduceLROnPlateau, StepLR
 from torchmetrics.functional import stat_scores
 
 from sidewalk_widths_extractor.modules import BaseModule
@@ -26,20 +27,33 @@ class SegModule(BaseModule):
         optimizer_params: Dict[str, Any],
         criterion_id: Union[Literal["ce"], Literal["wce"]],
         criterion_params: Dict[str, Any],
-        device: _DEVICE,
+        scheduler_id: Optional[
+            Union[
+                Literal["reducelronplateau"],
+                Literal["lambdalr"],
+                Literal["steplr"],
+                Literal["exponentiallr"],
+            ]
+        ] = None,
+        scheduler_params: Optional[Dict[str, Any]] = None,
+        device: Optional[_DEVICE] = None,
         save_network_checkpoint: bool = True,
         save_optimizer_checkpoint: bool = True,
     ):
         super().__init__(device)
 
+        self._network_id = network_id
         self._network_params = network_params
+        self._optimizer_id = optimizer_id
         self._optimizer_params = optimizer_params
+        self._criterion_id = criterion_id
         self._criterion_params = criterion_params
+        self._scheduler_id = scheduler_id
+        self._scheduler_params = scheduler_params
 
         self._save_network_checkpoint = save_network_checkpoint
         self._save_optimizer_checkpoint = save_optimizer_checkpoint
 
-        self._network_id = network_id
         if self._network_id == "unet":
             self._network = smp.Unet(**network_params)
         elif self._network_id == "unet++":
@@ -47,7 +61,6 @@ class SegModule(BaseModule):
         else:
             raise Exception("invaild network id")
 
-        self._optimizer_id = optimizer_id
         if self._optimizer_id == "adam":
             self._optimizer = torch.optim.Adam(
                 params=self._network.parameters(), **self._optimizer_params
@@ -59,14 +72,25 @@ class SegModule(BaseModule):
         else:
             raise Exception("invaild optimizer id")
 
-        self._criterion_id = criterion_id
         if self._criterion_id == "wce":
             weight = torch.Tensor(criterion_params["weight"])
             self._criterion = torch.nn.CrossEntropyLoss(weight=weight)
         elif self._criterion_id == "ce":
             self._criterion = torch.nn.CrossEntropyLoss()
         else:
-            raise Exception("invalid criterion id")
+            raise Exception("invaild criterion id")
+
+        if self._scheduler_id and isinstance(self._scheduler_params, dict):
+            if self._scheduler_id == "reducelronplateau":
+                self._scheduler = ReduceLROnPlateau(self._optimizer, **self._scheduler_params)
+            elif self._scheduler_id == "steplr":
+                self._scheduler = StepLR(self._optimizer, **self._scheduler_params)
+            elif self._scheduler_id == "exponentiallr":
+                self._scheduler = ExponentialLR(self._optimizer, **self._scheduler_params)
+            elif self._scheduler_id == "lambdalr":
+                self._scheduler = LambdaLR(self._optimizer, **self._scheduler_params)
+            else:
+                raise Exception("invaild scheduler id")
 
         self._network.to(self.device)
         self._criterion.to(self.device)
@@ -76,6 +100,7 @@ class SegModule(BaseModule):
             "network": {"id": self._network_id, "params": self._network_params},
             "optimizer": {"id": self._optimizer_id, "params": self._optimizer_params},
             "criterion": {"id": self._criterion_id, "params": self._criterion_params},
+            "scheduler": {"id": self._scheduler_id, "params": self._scheduler_params},
         }
 
     def train_step(self, batch: _BATCH, step_idx: int, epoch_idx: int) -> _STEP_RESULT:
@@ -140,7 +165,9 @@ class SegModule(BaseModule):
         }
 
     def infer(self, x: Any) -> Any:
-        out = self._network(x)
+        if len(x.shape) == 3:
+            x = x.unsqueeze(0)
+        out = self._network(x.to(self.device))
         preds = torch.argmax(out, dim=1)
         return preds
 
@@ -211,17 +238,19 @@ class SegModule(BaseModule):
             epoch_optimizer = load_checkpoint(checkpoint_path["optimizer"], self._optimizer)
             if epoch_optimizer:
                 epoch = epoch_optimizer
+                self.curr_epoch_idx = epoch_optimizer
         if load_network:
             epoch_network = load_checkpoint(checkpoint_path["network"], self._network)
             if epoch_network:
                 epoch = epoch_network
-
+                self.curr_epoch_idx = epoch_network
         return epoch
 
     def on_train_epoch_end(
         self, epoch_results: _EPOCH_RESULT, epoch_idx: Optional[int] = None
     ) -> None:
-        if epoch_idx and self.writer:  # log during the training
+        if epoch_idx and self.writer:  # only log during the training
+            self.writer.add_scalar("train/lr", self._optimizer.param_groups[0]["lr"], epoch_idx)
             for _, metric in epoch_results.items():
                 value = metric.compute("mean")
                 self.writer.add_scalar(metric.identifier, value.item(), epoch_idx)
@@ -229,7 +258,7 @@ class SegModule(BaseModule):
     def on_val_epoch_end(
         self, epoch_results: _EPOCH_RESULT, epoch_idx: Optional[int] = None
     ) -> None:
-        if epoch_idx and self.writer:  # log during the training
+        if epoch_idx and self.writer:  # only log during the training
             if "loss" in epoch_results:
                 metric = epoch_results["loss"]
                 self.writer.add_scalar(metric.identifier, metric.compute("mean").item(), epoch_idx)
@@ -257,6 +286,9 @@ class SegModule(BaseModule):
 
                 dice = 2 * tp / (2 * tp + fn + fp)
                 self.writer.add_scalar("val/dice", dice.item(), epoch_idx)
+
+                if self._scheduler:
+                    self._scheduler.step(dice)
 
     def log_stacked_segments_img(
         self, img: torch.Tensor, p: torch.Tensor, t: torch.Tensor, category: str, current_epoch: int

@@ -5,6 +5,8 @@
     "source_images_folder": "demo\\data\\images",
     "source_masks_folder": "demo\\data\\masks",
     "source_checkpoint_path": null,
+    "target_image_height" : 256,
+    "target_image_width" : 256,
     "enable_validation": true,
     "train_val_split_ratio": 0.8,
     "transfer_step_results_to_cpu": false,
@@ -12,31 +14,31 @@
     "pytorch_deterministic_enabled": false
   },
   "logging": {
-    "run_id": "vgg16_bn",
+    "run_id": "timm-efficientnet-b4",
     "include_date": true,
-    "target_log_folder": "demo\\logs\\individual",
+    "target_log_folder": "demo\\logs\\inter",
     "enable_progress_bar": true,
     "save_settings_file": true,
     "save_scalar_metrics": true,
-    "save_figure_images": false,
-    "save_checkpoint_every_n_epoch": null,
+    "save_figure_images": true,
+    "save_checkpoint_every_n_epoch": 25,
     "save_network_checkpoint": true,
     "save_optimizer_checkpoint": true
   },
   "training": {
-    "num_epochs": 50,
+    "num_epochs": 100,
     "max_steps": null,
     "data": {
       "batch_size": 8,
       "shuffle": true,
-      "drop_last": false,
+      "drop_last": true,
       "pin_memory": true,
       "num_workers": 0,
       "persistent_workers": false,
       "transform": {
-        "horizontal_flip_probability": 0.3833347137156021,
-        "vertical_flip_probability": 0.9252100013020603,
-        "random_brightness_contrast_probability": 0.6512654541313277,
+        "horizontal_flip_probability": 0.6351890868582795,
+        "vertical_flip_probability": 0.23892436386756186,
+        "random_brightness_contrast_probability": 0.6645730696008729,
         "brightness_limit": 0.2,
         "contrast_limit": 0.2
       }
@@ -49,29 +51,35 @@
       "shuffle": false,
       "drop_last": false,
       "pin_memory": true,
-      "num_workers": 0,
-      "persistent_workers": false
+      "num_workers": 2,
+      "persistent_workers": true
     }
   },
   "parameters": {
-    "network_id": "unet++",
+    "network_id": "unet",
     "network": {
-      "encoder_name": "vgg16_bn",
+      "encoder_name": "timm-efficientnet-b4",
       "encoder_weights": "imagenet",
-      "encoder_depth": 4,
+      "encoder_depth": 3,
       "in_channels": 3,
       "classes": 2
     },
     "optimizer_id": "adam",
     "optimizer": {
-      "lr": 0.0007495269882274605,
-      "weight_decay": 0.00014431491913213836,
+      "lr": 0.0019364459170130308,
+      "weight_decay": 4.404284170314888e-06,
       "betas": [0.9, 0.999],
       "eps": 1e-8
     },
     "criterion_id": "wce",
     "criterion": {
-      "weight": [0.4487400288054419, 0.3028686699290821]
+      "weight": [0.8053106470548073, 0.8053106470548073]
+    },
+    "scheduler_id": "reducelronplateau",
+    "scheduler": {
+      "mode": "max",
+      "factor" : 0.1,
+      "patience" : 10
     }
   }
 }

@@ -22,6 +22,10 @@ def train(config) -> None:
     if config["training"]["data"]["transform"]:
         train_transform = A.Compose(
             [
+                A.RandomCrop(
+                    width=config["general"]["target_image_width"],
+                    height=config["general"]["target_image_height"],
+                ),
                 A.HorizontalFlip(
                     p=config["training"]["data"]["transform"]["horizontal_flip_probability"]
                 ),
@@ -40,12 +44,22 @@ def train(config) -> None:
     else:
         train_transform = None
 
+    val_transform = A.Compose(
+        [
+            A.CenterCrop(
+                width=config["general"]["target_image_width"],
+                height=config["general"]["target_image_height"],
+            ),
+        ]
+    )
+
     if config["general"]["enable_validation"]:
         train_dataset, val_dataset = SatelliteDataset.from_split(
             config["general"]["source_images_folder"],
             config["general"]["source_masks_folder"],
             config["general"]["train_val_split_ratio"],
             train_transform=train_transform,
+            val_transform=val_transform,
             random_seed=config["general"]["random_seed"],
         )
     else:
@@ -76,6 +90,8 @@ def train(config) -> None:
             num_workers=config["validation"]["data"]["num_workers"],
             persistent_workers=config["validation"]["data"]["persistent_workers"],
         )
+    else:
+        val_dataloader = None
 
     if config["parameters"]["network"]["encoder_weights"] == "none":
         config["parameters"]["network"]["encoder_weights"] = None
@@ -90,15 +106,17 @@ def train(config) -> None:
         raise Exception("encoder_depth must be between 3 and 5")
 
     module = SegModule(
-        config["parameters"]["network_id"],
-        config["parameters"]["network"],
-        config["parameters"]["optimizer_id"],
-        config["parameters"]["optimizer"],
-        config["parameters"]["criterion_id"],
-        config["parameters"]["criterion"],
-        device,
-        config["logging"]["save_network_checkpoint"],
-        config["logging"]["save_optimizer_checkpoint"],
+        network_id=config["parameters"]["network_id"],
+        network_params=config["parameters"]["network"],
+        optimizer_id=config["parameters"]["optimizer_id"],
+        optimizer_params=config["parameters"]["optimizer"],
+        criterion_id=config["parameters"]["criterion_id"],
+        criterion_params=config["parameters"]["criterion"],
+        scheduler_id=config["parameters"]["scheduler_id"],
+        scheduler_params=config["parameters"]["scheduler"],
+        device=device,
+        save_network_checkpoint=config["logging"]["save_network_checkpoint"],
+        save_optimizer_checkpoint=config["logging"]["save_optimizer_checkpoint"],
     )
 
     if config["logging"]["include_date"]:
