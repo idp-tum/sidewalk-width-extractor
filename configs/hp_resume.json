@@ -1,6 +1,6 @@
 {
   "general": {
-    "n_trials": 40,
+    "n_trials": 30,
     "random_seed": 42,
     "force_cpu_usage": false,
     "source_images_folder": "demo\\data\\images",
@@ -13,16 +13,15 @@
     "pytorch_deterministic_enabled": false
   },
   "logging": {
-    "run_id": "HPT",
-    "include_date": true,
-    "target_log_folder": "demo\\logs\\tuning",
+    "run_id": "hp_resume",
+    "target_log_folder": "demo\\logs\\hp_resume",
     "enable_progress_bar": false,
     "save_settings_file": true,
     "save_scalar_metrics": true,
     "save_figure_images": false,
     "save_checkpoint_every_n_epoch": null,
     "save_network_checkpoint": true,
-    "save_optimizer_checkpoint": true
+    "save_optimizer_checkpoint": false
   },
   "training": {
     "num_epochs": 100,
@@ -30,8 +29,8 @@
       "shuffle": true,
       "drop_last": true,
       "pin_memory": true,
-      "num_workers": 0,
-      "persistent_workers": false
+      "num_workers": 2,
+      "persistent_workers": true
     },
     "scheduler": "reducelronplateau",
     "scheduler_params": {
@@ -50,10 +49,12 @@
       "persistent_workers": false
     }
   },
+  "resume": "demo/logs/hp/history.json",
+  "enqueue": null,
   "hyperparameters": {
     "network": {
       "type": "categorical",
-      "value": ["unet", "unet++"]
+      "value": ["unet"]
     },
     "network_encoder": {
       "type": "categorical",
