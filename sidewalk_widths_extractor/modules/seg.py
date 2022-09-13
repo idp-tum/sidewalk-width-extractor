@@ -1,5 +1,6 @@
 import os
-from typing_extensions import Any, Dict, Literal, Optional, Union
+from typing_extensions import Literal
+from typing import Any, Dict, Optional, Union
 
 import segmentation_models_pytorch as smp
 import torch
