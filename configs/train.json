@@ -16,12 +16,13 @@
   "logging": {
     "run_id": "timm-efficientnet-b4",
     "include_date": true,
-    "target_log_folder": "demo\\logs\\inter",
+    "target_log_folder": "demo\\logs\\ind",
     "enable_progress_bar": true,
     "save_settings_file": true,
     "save_scalar_metrics": true,
     "save_figure_images": true,
-    "save_checkpoint_every_n_epoch": 25,
+    "save_checkpoint_every_n_epoch": 10,
+    "save_best_model": true,
     "save_network_checkpoint": true,
     "save_optimizer_checkpoint": true
   },
@@ -33,8 +34,8 @@
       "shuffle": true,
       "drop_last": true,
       "pin_memory": true,
-      "num_workers": 0,
-      "persistent_workers": false,
+      "num_workers": 2,
+      "persistent_workers": true,
       "transform": {
         "horizontal_flip_probability": 0.6351890868582795,
         "vertical_flip_probability": 0.23892436386756186,
@@ -45,11 +46,10 @@
     }
   },
   "validation": {
-    "max_steps": null,
     "data": {
-      "batch_size": 4,
+      "batch_size": 8,
       "shuffle": false,
-      "drop_last": false,
+      "drop_last": true,
       "pin_memory": true,
       "num_workers": 2,
       "persistent_workers": true

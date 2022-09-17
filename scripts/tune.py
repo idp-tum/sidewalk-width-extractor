@@ -141,6 +141,7 @@ def objective(trial, config):
         device=device,
         save_network_checkpoint=config["logging"]["save_network_checkpoint"],
         save_optimizer_checkpoint=config["logging"]["save_optimizer_checkpoint"],
+        save_best_model=config["logging"]["save_best_model"],
     )
 
     trainer = Trainer(

@@ -1,11 +1,12 @@
+import operator
 import os
-from typing_extensions import Literal
 from typing import Any, Dict, Optional, Union
 
 import segmentation_models_pytorch as smp
 import torch
 from torch.optim.lr_scheduler import ExponentialLR, LambdaLR, ReduceLROnPlateau, StepLR
 from torchmetrics.functional import stat_scores
+from typing_extensions import Literal
 
 from sidewalk_widths_extractor.modules import BaseModule
 from sidewalk_widths_extractor.typing import (
@@ -40,6 +41,7 @@ class SegModule(BaseModule):
         device: Optional[_DEVICE] = None,
         save_network_checkpoint: bool = True,
         save_optimizer_checkpoint: bool = True,
+        save_best_model: bool = True,
     ):
         super().__init__(device)
 
@@ -54,6 +56,8 @@ class SegModule(BaseModule):
 
         self._save_network_checkpoint = save_network_checkpoint
         self._save_optimizer_checkpoint = save_optimizer_checkpoint
+
+        self._save_best_model = save_best_model
 
         if self._network_id == "unet":
             self._network = smp.Unet(**network_params)
@@ -96,12 +100,15 @@ class SegModule(BaseModule):
         self._network.to(self.device)
         self._criterion.to(self.device)
 
+        self._best_metrics = {}
+
     def get_settings(self) -> Dict[str, Any]:
         return {
             "network": {"id": self._network_id, "params": self._network_params},
             "optimizer": {"id": self._optimizer_id, "params": self._optimizer_params},
             "criterion": {"id": self._criterion_id, "params": self._criterion_params},
             "scheduler": {"id": self._scheduler_id, "params": self._scheduler_params},
+            "metrics": self._best_metrics,
         }
 
     def train_step(self, batch: _BATCH, step_idx: int, epoch_idx: int) -> _STEP_RESULT:
@@ -262,7 +269,9 @@ class SegModule(BaseModule):
         if epoch_idx and self.writer:  # only log during the training
             if "loss" in epoch_results:
                 metric = epoch_results["loss"]
-                self.writer.add_scalar(metric.identifier, metric.compute("mean").item(), epoch_idx)
+                value = metric.compute("mean").item()
+                self.writer.add_scalar(metric.identifier, value, epoch_idx)
+                self._update_best_metrics(metric.identifier, value, epoch_idx, operator.lt)
             if "tp" in epoch_results:
                 tp = epoch_results["tp"].compute("sum")
                 fp = epoch_results["fp"].compute("sum")
@@ -271,25 +280,71 @@ class SegModule(BaseModule):
 
                 accuracy = (tp + tn) / (tp + tn + fp + fn)
                 self.writer.add_scalar("val/accuracy", accuracy.item(), epoch_idx)
+                self._update_best_metrics("val/accuracy", accuracy.item(), epoch_idx, operator.gt)
 
                 if not tp + fp == 0:
                     precision = tp / (tp + fp)
                 else:
                     precision = torch.tensor(0.0)
-
                 self.writer.add_scalar("val/precision", precision.item(), epoch_idx)
+                self._update_best_metrics("val/precision", precision.item(), epoch_idx, operator.gt)
 
                 recall = tp / (tp + fn)
                 self.writer.add_scalar("val/recall", recall.item(), epoch_idx)
+                self._update_best_metrics("val/recall", recall.item(), epoch_idx, operator.gt)
+
+                f1 = (
+                    2 * (precision * recall) / (precision + recall)
+                    if precision + recall != 0
+                    else 0.0
+                )
+                self.writer.add_scalar("val/f1", f1.item(), epoch_idx)
+                self._update_best_metrics("val/f1", f1.item(), epoch_idx, operator.gt)
 
                 iou = tp / (tp + fn + fp)
                 self.writer.add_scalar("val/iou", iou.item(), epoch_idx)
+                self._update_best_metrics("val/iou", iou.item(), epoch_idx, operator.gt)
 
                 dice = 2 * tp / (2 * tp + fn + fp)
                 self.writer.add_scalar("val/dice", dice.item(), epoch_idx)
+                new_best_found = self._update_best_metrics(
+                    "val/dice", dice.item(), epoch_idx, operator.gt
+                )
 
                 if self._scheduler:
                     self._scheduler.step(dice)
+
+                if self._save_best_model and new_best_found:
+                    self.save(
+                        epoch_idx=epoch_idx,
+                        target_path=self.checkpoint_folder_path,
+                        network_filename="best_network",
+                        optimizer_filename="best_optimizer",
+                    )
+
+    def _update_best_metrics(
+        self,
+        id: str,
+        value: Any,
+        epoch_idx: int,
+        operator: Union[operator.gt, operator.lt],
+    ) -> bool:
+        if id not in self._best_metrics:
+            self._best_metrics[id] = {
+                "best": {"value": value, "epoch": epoch_idx},
+                "latest": {"value": value, "epoch": epoch_idx},
+            }
+            return True
+        else:
+            if operator(value, self._best_metrics[id]["best"]["value"]):
+                self._best_metrics[id] = {
+                    "best": {"value": value, "epoch": epoch_idx},
+                    "latest": {"value": value, "epoch": epoch_idx},
+                }
+                return True
+            else:
+                self._best_metrics[id]["latest"] = {"value": value, "epoch": epoch_idx}
+                return False
 
     def log_stacked_segments_img(
         self, img: torch.Tensor, p: torch.Tensor, t: torch.Tensor, category: str, current_epoch: int

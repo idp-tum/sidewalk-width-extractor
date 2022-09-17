@@ -20,8 +20,9 @@
     "save_scalar_metrics": true,
     "save_figure_images": false,
     "save_checkpoint_every_n_epoch": null,
+    "save_best_model": true,
     "save_network_checkpoint": true,
-    "save_optimizer_checkpoint": false
+    "save_optimizer_checkpoint": true
   },
   "training": {
     "num_epochs": 100,
@@ -41,12 +42,12 @@
   },
   "validation": {
     "data": {
-      "batch_size": 4,
+      "batch_size": 8,
       "shuffle": false,
       "drop_last": true,
       "pin_memory": true,
-      "num_workers": 0,
-      "persistent_workers": false
+      "num_workers": 2,
+      "persistent_workers": true
     }
   },
   "resume": null,
@@ -67,7 +68,7 @@
   "hyperparameters": {
     "network": {
       "type": "categorical",
-      "value": ["unet"]
+      "value": ["unet", "unet++"]
     },
     "network_encoder": {
       "type": "categorical",
@@ -83,7 +84,7 @@
     },
     "batch_size": {
       "type": "categorical",
-      "value": [8, 12, 16]
+      "value": [4, 8, 16, 32]
     },
     "lr": {
       "type": "loguniform",
