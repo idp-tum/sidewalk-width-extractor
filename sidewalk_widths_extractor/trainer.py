@@ -227,7 +227,7 @@ class Trainer:
         assert isinstance(validate_dataloader, DataLoader)
 
         self._module = module
-        self._curr_epoch_idx = epoch_idx
+        self._curr_epoch_idx = epoch_idx or self._curr_epoch_idx
 
         self._trained = True
         if epoch_idx == 1:

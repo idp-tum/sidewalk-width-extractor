@@ -117,6 +117,7 @@ def train(config) -> None:
         device=device,
         save_network_checkpoint=config["logging"]["save_network_checkpoint"],
         save_optimizer_checkpoint=config["logging"]["save_optimizer_checkpoint"],
+        save_best_model=config["logging"]["save_best_model"],
     )
 
     if config["logging"]["include_date"]:
