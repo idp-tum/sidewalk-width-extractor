@@ -149,12 +149,15 @@ def extract_predictions(
 
         h, w, _ = full_image.shape
 
-        images = [
-            full_image[: h // 2, : w // 2],
-            full_image[: h // 2, w // 2 :],
-            full_image[h // 2 :, : w // 2],
-            full_image[h // 2 :, w // 2 :],
-        ]
+        if h == 512 and w == 512:
+            images = [
+                full_image[: h // 2, : w // 2],
+                full_image[: h // 2, w // 2 :],
+                full_image[h // 2 :, : w // 2],
+                full_image[h // 2 :, w // 2 :],
+            ]
+        else:
+            images = [full_image]
 
         for i, x in enumerate(images):
             image = tensor_transform(x)
@@ -167,7 +170,7 @@ def extract_predictions(
 
             image_transform(seg).save(os.path.join(image_folder_path, f"seg_{i}.png"))
             image_transform((pred * 255).type(torch.uint8)).save(
-                os.path.join(image_folder_path, f"mask_{i}.png")
+                os.path.join(image_folder_path, f"pred_mask{i}.png")
             )
 
     return target_folder_path, len(image_paths)

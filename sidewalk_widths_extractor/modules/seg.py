@@ -297,14 +297,17 @@ class SegModule(BaseModule):
                 self.writer.add_scalar("val/precision", precision.item(), epoch_idx)
                 self._update_best_metrics("val/precision", precision.item(), epoch_idx, operator.gt)
 
-                recall = tp / (tp + fn)
+                if not tp + fn == 0:
+                    recall = tp / (tp + fn)
+                else:
+                    recall = torch.tensor(0.0)
                 self.writer.add_scalar("val/recall", recall.item(), epoch_idx)
                 self._update_best_metrics("val/recall", recall.item(), epoch_idx, operator.gt)
 
                 f1 = (
                     2 * (precision * recall) / (precision + recall)
                     if precision + recall != 0
-                    else 0.0
+                    else torch.tensor(0.0)
                 )
                 self.writer.add_scalar("val/f1", f1.item(), epoch_idx)
                 self._update_best_metrics("val/f1", f1.item(), epoch_idx, operator.gt)
