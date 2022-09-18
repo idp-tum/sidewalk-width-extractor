@@ -3,8 +3,8 @@
     "n_trials": 30,
     "random_seed": 42,
     "force_cpu_usage": false,
-    "source_images_folder": "demo\\datasets\\d320\\images",
-    "source_masks_folder": "demo\\datasets\\d320\\masks",
+    "source_images_folder": "demo/datasets/d320/images",
+    "source_masks_folder": "demo/datasets/d320/masks",
     "target_image_height" : 256,
     "target_image_width" : 256,
     "train_val_split_ratio": 0.8,
@@ -14,7 +14,7 @@
   },
   "logging": {
     "run_id": "hp_d320",
-    "target_log_folder": "demo\\logs\\hp_d320",
+    "target_log_folder": "demo/logs/hp_d320",
     "enable_progress_bar": false,
     "save_settings_file": true,
     "save_scalar_metrics": true,
@@ -71,7 +71,7 @@
     },
     "batch_size": {
       "type": "categorical",
-      "value": [4, 8, 16, 32]
+      "value": [4, 8, 16]
     },
     "lr": {
       "type": "loguniform",
