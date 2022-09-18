@@ -2,8 +2,8 @@
   "general": {
     "random_seed": 42,
     "force_cpu_usage": false,
-    "source_images_folder": "demo\\data\\images",
-    "source_masks_folder": "demo\\data\\masks",
+    "source_images_folder": "demo/data/images",
+    "source_masks_folder": "demo/data/masks",
     "source_checkpoint_path": null,
     "target_image_height" : 256,
     "target_image_width" : 256,
@@ -16,7 +16,7 @@
   "logging": {
     "run_id": "timm-efficientnet-b4",
     "include_date": true,
-    "target_log_folder": "demo\\logs\\ind",
+    "target_log_folder": "demo/logs/ind",
     "enable_progress_bar": true,
     "save_settings_file": true,
     "save_scalar_metrics": true,
