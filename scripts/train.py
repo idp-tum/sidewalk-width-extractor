@@ -16,6 +16,8 @@ def train(config) -> None:
 
     if config["general"]["force_cpu_usage"]:
         device = "cpu"
+        config["training"]["data"]["pin_memory"] = False
+        config["validation"]["data"]["pin_memory"] = False
     else:
         device = get_device()
 

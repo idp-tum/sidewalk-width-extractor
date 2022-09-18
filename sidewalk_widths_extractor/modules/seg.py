@@ -100,11 +100,19 @@ class SegModule(BaseModule):
         self._network.to(self.device)
         self._criterion.to(self.device)
 
+        self._total_network_params = sum(
+            p.numel() for p in self._network.parameters() if p.requires_grad
+        )
+
         self._best_metrics = {}
 
     def get_settings(self) -> Dict[str, Any]:
         return {
-            "network": {"id": self._network_id, "params": self._network_params},
+            "network": {
+                "id": self._network_id,
+                "no_parameters": self._total_network_params,
+                "params": self._network_params,
+            },
             "optimizer": {"id": self._optimizer_id, "params": self._optimizer_params},
             "criterion": {"id": self._criterion_id, "params": self._criterion_params},
             "scheduler": {"id": self._scheduler_id, "params": self._scheduler_params},
