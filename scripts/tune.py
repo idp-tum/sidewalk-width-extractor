@@ -219,7 +219,42 @@ def objective(trial, config):
     return dice
 
 
-def tune(config):
+def tune(config: dict) -> None:
+    mkdir(config["logging"]["target_log_folder"])
+
+    h_trials = []
+    if (
+        "resume" in config
+        and isinstance(config["resume"], str)
+        and os.path.exists(config["resume"])
+    ):
+        print(f"Resuming with given history from {config['resume']}")
+        with open(config["resume"]) as file:
+            history = json.load(file)
+            h_trials = [
+                optuna.trial.create_trial(
+                    params=trial["params"],
+                    distributions={
+                        x[0]: optuna.distributions.json_to_distribution(x[1])
+                        for x in history["distributions"]
+                    },
+                    value=trial["value"],
+                )
+                for trial in history["trials"]
+            ]
+        try:
+            shutil.copyfile(
+                config["resume"],
+                os.path.join(config["logging"]["target_log_folder"], "history.json"),
+            )
+        except Exception as e:
+            print(e)
+    else:
+        with open(
+            os.path.join(config["logging"]["target_log_folder"], "history.json"), "w"
+        ) as file:
+            json.dump({}, file, indent=2, sort_keys=False)
+
     study = optuna.create_study(
         study_name=config["logging"]["run_id"],
         direction="maximize",
@@ -232,37 +267,10 @@ def tune(config):
         ),
     )
 
-    mkdir(config["logging"]["target_log_folder"])
-
-    if (
-        "resume" in config
-        and isinstance(config["resume"], str)
-        and os.path.exists(config["resume"])
-    ):
-        print(f"Resuming with given history from {config['resume']}")
-        with open(config["resume"]) as file:
-            history = json.load(file)
-            study.add_trials(
-                [
-                    optuna.trial.create_trial(
-                        params=trial["params"],
-                        distributions={
-                            x[0]: optuna.distributions.json_to_distribution(x[1])
-                            for x in history["distributions"]
-                        },
-                        value=trial["value"],
-                    )
-                    for trial in history["trials"]
-                ]
-            )
-        shutil.copyfile(
-            config["resume"], os.path.join(config["logging"]["target_log_folder"], "history.json")
-        )
-    else:
-        with open(
-            os.path.join(config["logging"]["target_log_folder"], "history.json"), "w"
-        ) as file:
-            json.dump({}, file, indent=2, sort_keys=False)
+    n_trials = config["general"]["n_trials"]
+    if len(h_trials) > 0:
+        study.add_trials(h_trials)
+        n_trials -= len(h_trials)
 
     if "enqueue" in config and isinstance(config["enqueue"], dict):
         study.enqueue_trial(config["enqueue"])
@@ -270,10 +278,11 @@ def tune(config):
     with open(os.path.join(config["logging"]["target_log_folder"], "config.json"), "w") as file:
         json.dump(config, file, indent=2, sort_keys=False)
 
-    study.optimize(
-        lambda trial: objective(trial, config),
-        n_trials=config["general"]["n_trials"],
-    )
+    if n_trials > 0:
+        study.optimize(
+            lambda trial: objective(trial, config),
+            n_trials=n_trials,
+        )
 
     best_trial = study.best_trial
 
