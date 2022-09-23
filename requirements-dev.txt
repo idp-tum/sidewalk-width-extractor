@@ -6,3 +6,4 @@ black
 isort
 pre-commit
 pydocstyle
+gradio
