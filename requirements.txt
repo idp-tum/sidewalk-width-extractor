@@ -13,4 +13,3 @@ plotly
 matplotlib
 seaborn
 kaleido
-gradio
