@@ -1,5 +1,6 @@
 import json
 import os
+import ssl
 from argparse import ArgumentParser, Namespace
 
 import albumentations as A
@@ -9,6 +10,9 @@ from sidewalk_widths_extractor import Trainer, seed_all
 from sidewalk_widths_extractor.dataset import SatelliteDataset
 from sidewalk_widths_extractor.modules.seg import SegModule
 from sidewalk_widths_extractor.utilities import get_device
+
+# for pre-trained models with outdated certificationslike dense-net
+ssl._create_default_https_context = ssl._create_unverified_context
 
 
 def train(config) -> None:

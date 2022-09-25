@@ -1,0 +1,85 @@
+{
+    "general": {
+      "random_seed": 42,
+      "force_cpu_usage": false,
+      "source_images_folder": "demo/datasets/d640/images",
+      "source_masks_folder": "demo/datasets/d640/masks",
+      "source_checkpoint_path": null,
+      "target_image_height" : 256,
+      "target_image_width" : 256,
+      "enable_validation": true,
+      "train_val_split_ratio": 0.8,
+      "transfer_step_results_to_cpu": false,
+      "pytorch_benchmark_enabled": true,
+      "pytorch_deterministic_enabled": false
+    },
+    "logging": {
+      "run_id": "D640 Max",
+      "include_date": true,
+      "target_log_folder": "demo/logs/max",
+      "enable_progress_bar": true,
+      "save_settings_file": true,
+      "save_scalar_metrics": true,
+      "save_figure_images": true,
+      "save_checkpoint_every_n_epoch": null,
+      "save_best_model": true,
+      "save_network_checkpoint": true,
+      "save_optimizer_checkpoint": true
+    },
+    "training": {
+      "num_epochs": 75,
+      "max_steps": null,
+      "data": {
+        "batch_size": 4,
+        "shuffle": true,
+        "drop_last": true,
+        "pin_memory": true,
+        "num_workers": 2,
+        "persistent_workers": true,
+        "transform": {
+          "horizontal_flip_probability": 0.5,
+          "vertical_flip_probability": 0.1,
+          "random_brightness_contrast_probability":  0.9,
+          "brightness_limit": 0.2,
+          "contrast_limit": 0.2
+        }
+      }
+    },
+    "validation": {
+      "data": {
+        "batch_size": 8,
+        "shuffle": false,
+        "drop_last": true,
+        "pin_memory": true,
+        "num_workers": 2,
+        "persistent_workers": true
+      }
+    },
+    "parameters": {
+      "network_id": "unet",
+      "network": {
+        "encoder_name": "vgg16_bn",
+        "encoder_weights": "imagenet",
+        "encoder_depth": 4,
+        "in_channels": 3,
+        "classes": 2
+      },
+      "optimizer_id": "adam",
+      "optimizer": {
+        "lr": 0.00040903633912449176,
+        "weight_decay": 6.1753042099226055e-06,
+        "betas": [0.9, 0.999],
+        "eps": 1e-8
+      },
+      "criterion_id": "wce",
+      "criterion": {
+        "weight": [0.4337782436278757, 0.5477352706584913]
+      },
+      "scheduler_id": "reducelronplateau",
+      "scheduler": {
+        "mode": "max",
+        "factor" : 0.1,
+        "patience" : 10
+      }
+    }
+  }
