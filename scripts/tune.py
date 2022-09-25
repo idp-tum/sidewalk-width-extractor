@@ -2,6 +2,7 @@ import copy
 import json
 import os
 import shutil
+import ssl
 from argparse import ArgumentParser, Namespace
 from typing import Any
 
@@ -19,6 +20,9 @@ from sidewalk_widths_extractor.utilities import (
     save_writer_scalars,
 )
 from sidewalk_widths_extractor.utilities.io import mkdir
+
+# for pre-trained models with outdated certificationslike dense-net
+ssl._create_default_https_context = ssl._create_unverified_context
 
 
 def get_suggest(trial, s_name: str, s_type: str, s_values: Any) -> Any:
