@@ -143,13 +143,19 @@ def train(config) -> None:
         transfer_results_to_cpu=config["general"]["transfer_step_results_to_cpu"],
     )
 
+    checkpoint_path = {}
+    if config["general"]["source_model_path"]:
+        checkpoint_path["network"] = config["general"]["source_model_path"]
+    if config["general"]["source_optimizer_path"]:
+        checkpoint_path["optimizer"] = config["general"]["source_optimizer_path"]
+
     trainer.fit(
         module=module,
         dataloader=train_dataloader,
         validate_dataloader=val_dataloader,
         max_epochs=config["training"]["num_epochs"],
         max_steps=config["training"]["max_steps"],
-        checkpoint_path=config["general"]["source_checkpoint_path"],
+        checkpoint_path=checkpoint_path,
         save_every_n_epoch=config["logging"]["save_checkpoint_every_n_epoch"],
         save_settings=config["logging"]["save_settings_file"],
         save_scalars=config["logging"]["save_scalar_metrics"],
