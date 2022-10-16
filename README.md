@@ -1,4 +1,5 @@
 <img src="docs/images/header.png" width="600px">
+
 # Sidewalk Width Extractor
 
 
